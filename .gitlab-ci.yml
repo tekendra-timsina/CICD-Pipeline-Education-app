@@ -1,0 +1,175 @@
+before_script:
+  - apk update && apk upgrade && apk add --no-cache bash openssh
+
+stages:
+- test
+- release
+- deploy
+
+test:
+  stage: test
+  image: vaeum/alpine-python3-pip3
+  before_script:
+    # Installing requirements
+    - pip install -r requirements.txt
+
+  services:
+    - postgres:latest
+
+  variables:
+    # Connecting to testDB
+    POSTGRES_DB: postgres
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: ''
+    POSTGRES_HOST: postgres
+  
+  script:
+    - python manage.py test
+  
+release:
+  stage: release
+  image: docker:latest
+
+  services:
+   - docker:dind
+  
+  variables:
+    DOCKER_DRIVER: overlay2
+  
+  before_script:
+   - export COMMIT_SHA=$(echo $CI_COMMIT_SHA | cut -c1-8)
+   - apk update
+   - apk upgrade
+   - apk add python python-dev py-pip build-base 
+   - apk add --update ca-certificates
+   - apk add --update -t deps curl
+   - apk del --purge deps
+   - rm /var/cache/apk/*
+
+  script:
+    - docker build -t $GCP_PROJECT_ID/$CI_PROJECT_NAME:$COMMIT_SHA .
+    - echo $GCLOUD_SERVICE_KEY | base64 -d > ${HOME}/gcloud-service-key.json
+    - wget https://dl.google.com/dl/cloudsdk/release/google-cloud-sdk.tar.gz
+    - tar zxvf google-cloud-sdk.tar.gz && ./google-cloud-sdk/install.sh --usage-reporting=false --path-update=true
+    - google-cloud-sdk/bin/gcloud --quiet components update
+    - google-cloud-sdk/bin/gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json  || die "unable to authenticate service account for gcloud"
+    - google-cloud-sdk/bin/gcloud container clusters get-credentials {cluster_name} --zone europe-north1-a --project {gcp project-id}
+    - docker login -u _json_key --password-stdin https://gcr.io < ${HOME}/gcloud-service-key.json
+    - docker push $GCP_PROJECT_ID/$CI_PROJECT_NAME:$COMMIT_SHA
+  
+  only:
+    - master
+
+migrations:
+  image: google/cloud-sdk:alpine
+  stage: deploy
+  variables:
+    KUBE_LATEST_VERSION: "v1.8.5"
+  before_script:
+   # Pre-requisites required to install kubectl command line on gitlab runner
+   - export COMMIT_SHA=$(echo $CI_COMMIT_SHA | cut -c1-8)
+   - apk update
+   - apk upgrade
+   - apk add --update ca-certificates
+   - apk add --update -t deps curl
+   - curl -L https://storage.googleapis.com/kubernetes-release/release/${KUBE_LATEST_VERSION}/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl
+   - chmod +x /usr/local/bin/kubectl
+   - apk del --purge deps
+   - rm /var/cache/apk/*
+
+  script:
+    - echo $GCLOUD_SERVICE_KEY | base64 -d > ${HOME}/gcloud-service-key.json
+    - gcloud --quiet components update
+    - gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json  || die "unable to authenticate service account for gcloud"
+    - gcloud container clusters get-credentials {cluster_name} --zone europe-north1-a --project {gcp project-id}
+    # Update the image tag inside the file quiz-migration.yml using sed
+    - sed 's/TAG/'"$COMMIT_SHA"'/g' quiz-migration.yml > quiz-migration_prod.yml
+
+    - kubectl apply -f quiz-migration_prod.yml
+    # - kubectl delete -f quiz-migration_prod.yml
+  environment: 
+    name: production
+  
+  only:
+    - master
+
+collect-static:
+  image: google/cloud-sdk:alpine
+  stage: deploy
+  variables:
+    KUBE_LATEST_VERSION: "v1.8.5"
+  before_script:
+   - export COMMIT_SHA=$(echo $CI_COMMIT_SHA | cut -c1-8)
+   - export POSTGRES_PASSWORD=$(kubectl get secret --namespace default quiz-postgresql -o jsonpath="{.data.postgresql-password}" | base64 –decode)
+   - apk update
+   - apk upgrade
+   - apk add --update ca-certificates
+   - apk add --update -t deps curl
+   - curl -L https://storage.googleapis.com/kubernetes-release/release/${KUBE_LATEST_VERSION}/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl
+   - chmod +x /usr/local/bin/kubectl
+   - apk del --purge deps
+   - rm /var/cache/apk/*
+
+  script:
+    # Write our GCP service account private key into a file
+    - echo $GCLOUD_SERVICE_KEY | base64 -d > ${HOME}/gcloud-service-key.json
+    
+    # Update gcloud components
+    - gcloud --quiet components update
+
+    # Give access to gcloud project
+    - gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json  || die "unable to authenticate service account for gcloud"
+    - gcloud container clusters get-credentials {cluster_name} --zone europe-north1-a --project {gcp project-id}
+    
+    # Update the image tag inside the file collect-static.yml using sed
+    - sed 's/TAG/'"$COMMIT_SHA"'/g' collect-static.yml > collect-static_prod.yml
+
+    # Run kubectl apply to apply any changes made in env variables, etc
+    - kubectl apply -f collect-static_prod.yml
+    - kubectl delete -f collect-static_prod.yml
+  environment: 
+    name: production
+  # when: manual
+  only:
+    - master
+
+deploy:
+  image: google/cloud-sdk:alpine
+  stage: deploy
+  variables:
+    KUBE_LATEST_VERSION: "v1.8.5"
+  before_script:
+   - export COMMIT_SHA=$(echo $CI_COMMIT_SHA | cut -c1-8)
+   - export POSTGRES_PASSWORD=$(kubectl get secret --namespace default quiz-postgresql -o jsonpath="{.data.postgresql-password}" | base64 –decode)
+   - apk update
+   - apk upgrade
+   - apk add --update ca-certificates
+   - apk add --update -t deps curl
+   - curl -L https://storage.googleapis.com/kubernetes-release/release/${KUBE_LATEST_VERSION}/bin/linux/amd64/kubectl -o /usr/local/bin/kubectl
+   - chmod +x /usr/local/bin/kubectl
+   - apk del --purge deps
+   - rm /var/cache/apk/*
+
+  script:
+    # Write our GCP service account private key into a file
+    - echo $GCLOUD_SERVICE_KEY | base64 -d > ${HOME}/gcloud-service-key.json
+    
+    # Update gcloud components
+    - gcloud --quiet components update
+
+    # Give access to gcloud project
+    - gcloud auth activate-service-account --key-file ${HOME}/gcloud-service-key.json  || die "unable to authenticate service account for gcloud"
+    - gcloud container clusters get-credentials {cluster_name} --zone europe-north1-a --project {gcp project-id}
+    
+    - sed 's/TAG/'"$COMMIT_SHA"'/g' quizapi.yml > quizapi_prod.yml
+    # Run kubectl apply to apply any changes made in env variables, etc
+    - kubectl apply -f quizapi_prod.yml
+
+
+    # Update deployment with new image
+    #- kubectl set image deployment/quiz-api ${CI_PROJECT_NAME}=$GCP_PROJECT_ID/$CI_PROJECT_NAME:$COMMIT_SHA
+  environment: 
+    name: production
+    url: https://itsabout.ml/
+  only:
+  - master

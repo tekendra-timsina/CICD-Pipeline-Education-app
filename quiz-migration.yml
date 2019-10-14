@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: quiz-migration
+spec:
+  template:
+    metadata:
+      name: quiz-migration
+    spec:
+      containers:
+      - name: "quiz"
+        image: gcr.io/{gcp project-id}/{app_name:TAG}
+        imagePullPolicy: Always
+        env:
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: quiz-postgresql
+                  key: postgresql-password
+            - name: POSTGRES_HOST
+              value: quiz-postgresql.default.svc.cluster.local
+        command: [ "/bin/sh", "-c", "python manage.py migrate" ]
+      restartPolicy: Never
+  #backoffLimit: 5     

@@ -1,0 +1,27 @@
+<body style = "background-color:LightCyan;">
+
+<h2 align="center"> Quiz </h2> <br> <br>
+<h2> Hello {{request.user.first_name}},  </h2> <br>
+
+<p style="font-style: normal; font-size:12px; "> Test your skills and knowledge! <br>  <br> Completing this quiz will help you to assess your level.
+<br> <br> There is no time limit to answer the questions. </p>
+
+{% for question in all_questions %}
+
+
+{{question.question_heading}}
+
+{% endfor %}
+
+<a href = "{% url 'quiz:page' 1 %}" > Start to Python Quiz </a>
+<br>
+<br>
+<a href = "{% url 'quiz:page' 6 %}" > Start to Project Management Quiz </a>
+
+<br>
+<br>
+
+<a href = "{% url 'quiz:page' 11 %}" > Start to DevOps Quiz </a>
+
+<br>
+<br>

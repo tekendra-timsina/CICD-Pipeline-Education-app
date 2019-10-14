@@ -1,0 +1,83 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: quiz-api
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  template:
+    metadata:
+      labels:
+        name: quiz-api
+        app: quizapi
+    spec:
+      containers:
+      - name: education-app
+        image: gcr.io/{gcp project-id}/{app_name:TAG}
+        resources:
+          requests:
+            cpu: 125m
+            memory: 100Mi
+          limits:
+            cpu: 200m
+            memory: 200Mi
+        imagePullPolicy: Always
+        env:
+          - name: GS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: quiz-static
+                key: gs_access_key_id
+          - name: GS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: quiz-static
+                key: gs_secret_access_key
+          - name: GS_BUCKET_NAME
+            valueFrom:
+              secretKeyRef:
+                name: quiz-static
+                key: gs_bucket_name
+          - name: POSTGRES_DB
+            value: postgres
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: quiz-postgresql
+                key: postgresql-password
+          - name: POSTGRES_HOST
+            value: quiz-postgresql.default.svc.cluster.local
+          - name: POLLSAPI_PROXY_ACCESS_LOG
+            value: "/dev/stdout"
+          - name: POLLSAPI_ADMIN_ACCESS_LOG
+            value: "/dev/stdout"
+          - name: POLLSAPI_PROXY_ERROR_LOG
+            value: "/dev/stderr"
+          - name: POLLSAPI_ADMIN_ERROR_LOG
+            value: "/dev/stderr"
+        ports:
+        - name: quiz-test-api
+          containerPort: 8000
+          protocol: TCP
+
+---
+apiVersion: "v1"
+kind: "Service"
+metadata:
+  name: "quiz-api-service"
+  namespace: "default"
+  labels:
+    app: "quizapi"
+    name: "quiz-api"
+spec:
+  ports:
+  - protocol: "TCP"
+    port: 80
+    targetPort: 8000
+  selector:
+    app: "quizapi"
+    name: "quiz-api"
+  type: "ClusterIP"
+  

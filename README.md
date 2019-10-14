@@ -1,5 +1,5 @@
 # Education-App
-An online education webapp created using auto DevOps envirnment(CICD Pipeline)
+An online education webapp created using auto DevOps envirnment(CICD Pipeline). A project work done for Amiedu during DevOps course. 
 
 Hello all!
 
@@ -24,5 +24,4 @@ Project scope:
 This project aims to create an online website that provides education services for its users (students) using DevOps envirnoment. 
 
 
-
-
+This project work was done by özkan Demiribilek(lead role in devlopment) and Tekendra Timsina(lead role in Deployment) during a DevOps training course in Amiedu. 

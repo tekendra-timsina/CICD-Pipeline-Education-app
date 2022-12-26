@@ -7,4 +7,4 @@ Django>=2.1.7
 django-rest-swagger==2.2.0
 django-storages[google]
 djangorestframework==3.9.1
-wheel==0.32.3
+wheel==0.38.1
